@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import os
+import sys
 import time
 
 try:
@@ -20,6 +21,7 @@ from api_lib.open_positions import (
 from utils.log_config import logging_config
 
 load_dotenv()
+sleep_interval = os.getenv('SLEEP_INTERVAL', 120)
 
 class OrderTracker:
     def __init__(self):
@@ -194,7 +196,7 @@ class OrderTracker:
         else:
             return None
 
-    def process_short_position(self, position, stop_order, stopPrice, take_profit_price, saved_entry):
+    def process_short_position(self, position, stop_order, stopPrice, saved_entry):
         symbol = position['symbol']
         positionId = position['positionId']
         markPrice = float(position['markPrice'])
@@ -231,7 +233,7 @@ class OrderTracker:
                     f"{self.m}SHORT position {symbol} markPrice {markPrice} >= saved_markPrice {saved_markPrice}, doing nothing"
                 )
 
-    def process_long_position(self, position, stop_order, stopPrice, take_profit_price, saved_entry):
+    def process_long_position(self, position, stop_order, stopPrice, saved_entry):
         symbol = position['symbol']
         positionId = position['positionId']
         markPrice = float(position['markPrice'])
@@ -319,4 +321,9 @@ class OrderTracker:
         
 if __name__ == '__main__':
     order_manager = OrderTracker()
-    order_manager.run()
+    if len(sys.argv) > 1 and sys.argv[1] == 'loop':
+        while True:
+            order_manager.run()
+            time.sleep(sleep_interval)
+    else:
+        order_manager.run()

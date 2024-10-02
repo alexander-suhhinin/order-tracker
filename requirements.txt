@@ -1,0 +1,6 @@
+colorama==0.4.6
+logging==0.4.9.6
+pandas==2.2.3
+python-dotenv==1.0.1
+redis==5.1.0
+requests==2.32.3

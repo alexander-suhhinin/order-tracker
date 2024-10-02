@@ -90,10 +90,9 @@ def cancel_and_set_new(symbol, position_side, amount, sl_price, cancel_order):
     log.info(f'Replace STOP order {symbol}, {position_side}, {amount}, SL: {sl_price} ')
 
     response = send_request_demo(method, path, paramsStr, payload)
-    order = json.loads(response)
-    if (order['code'] != 0):
-        log.error(order)
-    return order     
+    if (response['code'] != 0):
+        log.error(response)
+    return response     
 
 def create_stop_order(symbol, position_side, amount, sl_price):
 

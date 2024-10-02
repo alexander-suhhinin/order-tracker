@@ -21,7 +21,7 @@ from api_lib.open_positions import (
 from utils.log_config import logging_config
 
 load_dotenv()
-sleep_interval = os.getenv('SLEEP_INTERVAL', 120)
+sleep_interval = int(os.getenv('SLEEP_INTERVAL', 120))
 
 class OrderTracker:
     def __init__(self):
@@ -115,26 +115,19 @@ class OrderTracker:
             self.log.error(f"{self.m}Exception occurred: {e}")
 
     def process_position(self, position):
-        print(position)
-        symbol = position['symbol']
         positionSide = position['positionSide']
         positionId = position['positionId']
-        positionAmt = float(position['positionAmt'])
-        markPrice = float(position['markPrice'])
-        avgPrice = float(position['avgPrice'])
 
         # Find associated orders
         stop_order, stopPrice = self.get_stop_order(position)
-        take_profit_price = self.get_take_profit_price(position, avgPrice)
-        print("HERE 1", positionId)
         # Get saved_locally entry for this position
         saved_entry = self.get_saved_entry(positionId)
-        print("HERE 2")
+
         # Process based on positionSide
         if positionSide == 'SHORT':
-            self.process_short_position(position, stop_order, stopPrice, take_profit_price, saved_entry)
+            self.process_short_position(position, stop_order, stopPrice, saved_entry)
         elif positionSide == 'LONG':
-            self.process_long_position(position, stop_order, stopPrice, take_profit_price, saved_entry)
+            self.process_long_position(position, stop_order, stopPrice, saved_entry)
         else:
             self.log.error(
                 f"{self.m}Unknown positionSide {positionSide} for position {positionId}"
@@ -282,7 +275,7 @@ class OrderTracker:
                 positionSide,
                 positionAmt,
                 new_sl_price,
-                stop_order['orderId'],
+                stop_order,
             )
         else:
             # Create new stop order
@@ -310,11 +303,13 @@ class OrderTracker:
             'markPrice': markPrice,
             'time': int(time.time() * 1000),
         }
-        self.saved_locally = self.saved_locally.append(
-            new_saved_entry, ignore_index=True
-        )
+
+        new_row_df = pd.DataFrame([new_saved_entry])
+        self.saved_locally = pd.concat([self.saved_locally, new_row_df], ignore_index=True)
 
     def remove_saved_entry(self, positionId):
+        if self.saved_locally.shape[0] == 0:
+            return None
         self.saved_locally = self.saved_locally[
             self.saved_locally['positionId'] != positionId
         ]

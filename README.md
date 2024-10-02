@@ -21,7 +21,7 @@ Percent values is hardcoded, but easy could be extracted to variables.
 
 ### install
 
-- clone repository git clone https://github.com/aleksandr-suhhinin/order-tracker.git order_tracker
+- clone repository `git clone https://github.com/aleksandr-suhhinin/order-tracker.git order_tracker`
 - cd into order_tracker
 - install dependencies: `pip install -r requirements.txt`
 - create .env file or `cp env.example .env` and set API_KEY,  API_SECRET and if necessary set APIURL, currently set for using Bingx demo account.

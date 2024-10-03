@@ -1,6 +1,5 @@
 from hashlib import sha256
 import hmac
-import json
 import os
 import pandas as pd
 import requests
@@ -51,10 +50,9 @@ def close_position(position):
     log.info(f'Close position {symbol}, {position_side}, {positionAmt}')
 
     response = send_request_demo(method, path, paramsStr, payload)
-    order = json.loads(response)
-    if (order['code'] != 0):
-        log.error(order)
-    return order       
+    if (response['code'] != 0):
+        log.error(response)
+    return response       
 
 def get_full_orders(limit=500):
     payload = {}
@@ -111,10 +109,10 @@ def create_stop_order(symbol, position_side, amount, sl_price):
     log.info(f'Create STOP order {symbol}, {position_side}, {amount}, SL: {sl_price} ')
 
     response = send_request_demo(method, path, paramsStr, payload)
-    order = json.loads(response)
-    if (order['code'] != 0):
-        log.error(order)
-    return order    
+
+    if (response['code'] != 0):
+        log.error(response)
+    return response    
 
 def get_price(symbol):
     payload = {}

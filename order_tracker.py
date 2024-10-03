@@ -147,7 +147,7 @@ class OrderTracker:
         positionSide = position['positionSide']
         avgPrice = float(position['avgPrice'])
         if self.open_orders is None or self.open_orders.shape[0] == 0:
-            return None, 0
+            return None, avgPrice * 1.015 if  positionSide == 'SHORT' else avgPrice * 0.985
             
         stop_orders = self.open_orders[
             (self.open_orders['symbol'] == symbol)
@@ -211,10 +211,10 @@ class OrderTracker:
 
         # Get the take profit price
         take_profit_price = self.get_take_profit_price(position, avgPrice)
-
         # Condition 1: Close position if criteria met
-        difference = avgPrice + stopPrice
+        difference = stopPrice - avgPrice
         stopThreshold = avgPrice + (difference * 0.2)        
+        print(f"stopThreshold {stopThreshold}, avgPrice: {avgPrice}, stopPrice {stopPrice}")
         if markPrice > avgPrice and markPrice > stopThreshold:
             self.log.info(
                 f"{self.m}Closing SHORT position {symbol} as markPrice > avgPrice and markPrice > 120% of stopPrice"

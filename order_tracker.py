@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import sys
 import time
+import traceback
 
 try:
     import redis
@@ -18,6 +19,7 @@ from api_lib.open_positions import (
     cancel_and_set_new,
     create_stop_order,
 )
+
 from utils.log_config import logging_config
 
 load_dotenv()
@@ -25,6 +27,9 @@ sleep_interval = int(os.getenv('SLEEP_INTERVAL', 120))
 
 class OrderTracker:
     def __init__(self):
+        self.run_with_mark = None
+        self.open_orders = None
+        self.open_positions = None
         
         # Initialize logging
         self.log = logging_config()
@@ -91,33 +96,37 @@ class OrderTracker:
                     order['positionId'] = filtered_position.iloc[0]['positionId']
 
         df = pd.DataFrame(orders)
-        df = df[(df['status'] != 'CANCELLED') & (df['status'] != 'FILLED')]
+        if df.shape[0] > 0:
+            df = df[(df['status'] != 'CANCELLED') & (df['status'] != 'FILLED')]
 
         return df
 
-    def close_position(self, position_row):
+    def close_position_order(self, position_row):
         self.log.info(
             f"{self.m}Trying to close {position_row['symbol']}, {position_row['positionSide']}, amount: {position_row['positionAmt']}"
         )
         order = close_position(position_row)
         self.log.info(f"{self.m}Closed position with order {order}")
 
-    def run(self):
+    def run(self, re_raise_exception=False, mark=None):
+        if not mark is None:
+            self.run_with_mark = mark
         try:
             self.open_positions = self.get_open_positions()
             self.open_orders = self.get_open_orders()
-
             for index, position in self.open_positions.iterrows():
                 self.process_position(position)
 
             self.save_saved_locally()
         except Exception as e:
-            self.log.error(f"{self.m}Exception occurred: {e}")
+            self.log.error(f"{self.m}Exception occurred: {e}\n{traceback.format_exc()}")
+            if re_raise_exception:
+                raise
 
     def process_position(self, position):
         positionSide = position['positionSide']
         positionId = position['positionId']
-
+        self.log.info(f"{self.m}Processing {position['symbol']}, {positionSide}")
         # Find associated orders
         stop_order, stopPrice = self.get_stop_order(position)
         # Get saved_locally entry for this position
@@ -137,7 +146,9 @@ class OrderTracker:
         symbol = position['symbol']
         positionSide = position['positionSide']
         avgPrice = float(position['avgPrice'])
-
+        if self.open_orders is None or self.open_orders.shape[0] == 0:
+            return None, 0
+            
         stop_orders = self.open_orders[
             (self.open_orders['symbol'] == symbol)
             & (self.open_orders['positionSide'] == positionSide)
@@ -164,6 +175,9 @@ class OrderTracker:
         symbol = position['symbol']
         positionSide = position['positionSide']
 
+        if self.open_orders is None or self.open_orders.shape[0] == 0:
+            return 0
+        
         take_profit_orders = self.open_orders[
             (self.open_orders['symbol'] == symbol)
             & (self.open_orders['positionSide'] == positionSide)
@@ -195,12 +209,17 @@ class OrderTracker:
         markPrice = float(position['markPrice'])
         avgPrice = float(position['avgPrice'])
 
+        # Get the take profit price
+        take_profit_price = self.get_take_profit_price(position, avgPrice)
+
         # Condition 1: Close position if criteria met
-        if markPrice > avgPrice and markPrice > stopPrice * 1.2:
+        difference = avgPrice + stopPrice
+        stopThreshold = avgPrice + (difference * 0.2)        
+        if markPrice > avgPrice and markPrice > stopThreshold:
             self.log.info(
                 f"{self.m}Closing SHORT position {symbol} as markPrice > avgPrice and markPrice > 120% of stopPrice"
             )
-            self.close_position(position)
+            self.close_position_order(position)
             # Remove from saved_locally
             self.remove_saved_entry(positionId)
         elif markPrice < avgPrice:
@@ -214,8 +233,10 @@ class OrderTracker:
                     update_stop_loss = True
 
             if update_stop_loss:
-                # Set stop loss at markPrice + 15%
-                new_sl_price = markPrice + (markPrice * 0.15)
+                # Calculate new stop loss
+                potential_profit = markPrice - take_profit_price
+                sl_adjustment = potential_profit * 0.15
+                new_sl_price = markPrice + sl_adjustment
                 self.log.info(
                     f"{self.m}Setting new stop loss for SHORT position {symbol} at {new_sl_price}"
                 )
@@ -231,13 +252,16 @@ class OrderTracker:
         positionId = position['positionId']
         markPrice = float(position['markPrice'])
         avgPrice = float(position['avgPrice'])
+        take_profit_price = self.get_take_profit_price(position, avgPrice)
 
         # Condition 1: Close position if criteria met
-        if markPrice < avgPrice and markPrice < stopPrice * 0.8:
+        difference = avgPrice - stopPrice
+        stopThreshold = avgPrice - (difference * 0.2)
+        if markPrice < avgPrice and markPrice < stopThreshold:
             self.log.info(
                 f"{self.m}Closing LONG position {symbol} as markPrice < avgPrice and markPrice < 80% of stopPrice"
             )
-            self.close_position(position)
+            self.close_position_order(position)
             # Remove from saved_locally
             self.remove_saved_entry(positionId)
         elif markPrice > avgPrice:
@@ -251,8 +275,10 @@ class OrderTracker:
                     update_stop_loss = True
 
             if update_stop_loss:
-                # Set stop loss at markPrice - 15%
-                new_sl_price = markPrice - (markPrice * 0.15)
+                # Calculate new stop loss
+                potential_profit = take_profit_price - markPrice
+                sl_adjustment = potential_profit * 0.15
+                new_sl_price = markPrice - sl_adjustment
                 self.log.info(
                     f"{self.m}Setting new stop loss for LONG position {symbol} at {new_sl_price}"
                 )
@@ -261,13 +287,14 @@ class OrderTracker:
             else:
                 self.log.info(
                     f"{self.m}LONG position {symbol} markPrice {markPrice} <= saved_markPrice {saved_markPrice}, doing nothing"
-                )
+                )    
 
     def update_stop_loss(self, position, new_sl_price, stop_order):
+        
         symbol = position['symbol']
         positionSide = position['positionSide']
         positionAmt = float(position['positionAmt'])
-
+        
         if stop_order is not None:
             # Cancel and set new stop order
             cancel_and_set_new(
@@ -293,11 +320,9 @@ class OrderTracker:
 
         new_saved_entry = {
             'symbol': symbol,
-            'orderId': stop_order['orderId']
-            if stop_order is not None
-            else None,
+            'orderId': stop_order['orderId'] if stop_order is not None else None,
             'positionSide': positionSide,
-            'type': stop_order['type'],
+            'type': stop_order['type'] if stop_order is not None else 'STOP_MARKET',
             'stopPrice': new_sl_price,
             'positionId': positionId,
             'markPrice': markPrice,

@@ -151,3 +151,36 @@ def parseParam(paramsMap):
      return paramsStr+"&timestamp="+str(int(time.time() * 1000))
     else:
      return paramsStr+"timestamp="+str(int(time.time() * 1000))
+
+def get_klines_data(symbol, interval, limit=500, startTime=None, endTime=None, exch=None):
+    payload = {}
+    path = '/openApi/swap/v3/quote/klines'
+    method = "GET"
+
+    paramsMap = {
+      "symbol": symbol,
+      "interval": interval,
+      "limit": limit,
+    }
+    if startTime != None:
+        paramsMap['startTime'] = startTime
+    if endTime != None:
+        paramsMap['endTime'] = endTime
+
+    paramsStr = parseParam(paramsMap)
+    return send_request_demo(method, path, paramsStr, payload)
+
+def get_klines_data_df(symbol, interval, limit=1000):
+    response = get_klines_data(symbol, interval, limit)
+    df = pd.DataFrame(response['data'])
+    if df.empty:
+        return df
+
+    for col in ['close', 'open', 'high', 'low', 'volume']:
+        df[col] = df[col].astype(float)
+
+    df['time'] = pd.to_datetime(df['time'], unit='ms')
+    df.set_index('time', inplace=True)
+    df.sort_index(inplace=True)
+    return df
+

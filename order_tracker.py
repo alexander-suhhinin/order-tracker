@@ -188,7 +188,12 @@ class OrderTracker:
             take_profit_price = float(take_profit_orders.iloc[0]['stopPrice'])
         else:
             # If no TAKE_PROFIT order, suppose take_profit_price is avgPrice * 1.015
-            take_profit_price = avgPrice * 1.015
+            if positionSide == 'LONG':
+                take_profit_price = avgPrice * 1.015  # 1.5% выше avgPrice для лонга
+            elif positionSide == 'SHORT':
+                take_profit_price = avgPrice * 0.985  # 1.5% ниже avgPrice для шорта
+            else:
+                take_profit_price = avgPrice  # На всякий случай
 
         return take_profit_price
 
@@ -213,7 +218,7 @@ class OrderTracker:
         take_profit_price = self.get_take_profit_price(position, avgPrice)
         # Condition 1: Close position if criteria met
         difference = stopPrice - avgPrice
-        stopThreshold = avgPrice + (difference * 0.2)        
+        stopThreshold = avgPrice + (difference * 0.35)
         print(f"stopThreshold {stopThreshold}, avgPrice: {avgPrice}, stopPrice {stopPrice}")
         if markPrice > avgPrice and markPrice > stopThreshold:
             self.log.info(
@@ -235,7 +240,7 @@ class OrderTracker:
             if update_stop_loss:
                 # Calculate new stop loss
                 potential_profit = markPrice - take_profit_price
-                sl_adjustment = potential_profit * 0.15
+                sl_adjustment = potential_profit * 0.12
                 new_sl_price = markPrice + sl_adjustment
                 self.log.info(
                     f"{self.m}Setting new stop loss for SHORT position {symbol} at {new_sl_price}"
@@ -256,7 +261,7 @@ class OrderTracker:
 
         # Condition 1: Close position if criteria met
         difference = avgPrice - stopPrice
-        stopThreshold = avgPrice - (difference * 0.2)
+        stopThreshold = avgPrice - (difference * 0.35)
         if markPrice < avgPrice and markPrice < stopThreshold:
             self.log.info(
                 f"{self.m}Closing LONG position {symbol} as markPrice < avgPrice and markPrice < 80% of stopPrice"
@@ -277,7 +282,7 @@ class OrderTracker:
             if update_stop_loss:
                 # Calculate new stop loss
                 potential_profit = take_profit_price - markPrice
-                sl_adjustment = potential_profit * 0.15
+                sl_adjustment = potential_profit * 0.12
                 new_sl_price = markPrice - sl_adjustment
                 self.log.info(
                     f"{self.m}Setting new stop loss for LONG position {symbol} at {new_sl_price}"

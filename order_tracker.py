@@ -261,7 +261,9 @@ class OrderTracker:
 
         # Condition 1: Close position if criteria met
         difference = avgPrice - stopPrice
-        stopThreshold = avgPrice - (difference * 0.35)
+        profit_diff = take_profit_price - avgPrice
+        stopThreshold = avgPrice - (difference * 0.5)
+        profitThreshold = avgPrice + (profit_diff * 0.5)
         if markPrice < avgPrice and markPrice < stopThreshold:
             self.log.info(
                 f"{self.m}Closing LONG position {symbol} as markPrice < avgPrice and markPrice < 80% of stopPrice"
@@ -269,15 +271,16 @@ class OrderTracker:
             self.close_position_order(position)
             # Remove from saved_locally
             self.remove_saved_entry(positionId)
-        elif markPrice > avgPrice:
+        elif markPrice > avgPrice and markPrice > profitThreshold:
             # Determine if we should update the stop loss
             update_stop_loss = False
+
             if saved_entry is None:
                 update_stop_loss = True
-            else:
-                saved_markPrice = float(saved_entry['markPrice'])
-                if markPrice > saved_markPrice:
-                    update_stop_loss = True
+            # else:
+            #     saved_markPrice = float(saved_entry['markPrice'])
+            #     if markPrice > saved_markPrice:
+            #         update_stop_loss = True
 
             if update_stop_loss:
                 # Calculate new stop loss

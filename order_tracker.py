@@ -23,7 +23,7 @@ from api_lib.open_positions import (
 from utils.log_config import logging_config
 
 load_dotenv()
-sleep_interval = int(os.getenv('SLEEP_INTERVAL', 120))
+sleep_interval = int(os.getenv('SLEEP_INTERVAL', 60))
 
 class OrderTracker:
     def __init__(self):
